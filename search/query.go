@@ -314,24 +314,43 @@ func DoSearchProfiles(ctx context.Context, dir identity.Directory, escli *es.Cli
 		}
 	}
 
+	boolQuery := map[string]interface{}{
+		"must": primary,
+		"should": []interface{}{
+			map[string]interface{}{"term": map[string]interface{}{"has_avatar": true}},
+			map[string]interface{}{"term": map[string]interface{}{"has_banner": true}},
+		},
+		"minimum_should_match": 0,
+		"boost":                0.5,
+	}
+
+	if len(filters) > 0 {
+		boolQuery["filter"] = filters
+	}
+
+	// Wrap in function_score to boost by follower count
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": primary,
-				"should": []interface{}{
-					map[string]interface{}{"term": map[string]interface{}{"has_avatar": true}},
-					map[string]interface{}{"term": map[string]interface{}{"has_banner": true}},
+			"function_score": map[string]interface{}{
+				"query": map[string]interface{}{
+					"bool": boolQuery,
 				},
-				"minimum_should_match": 0,
-				"boost":                0.5,
+				"functions": []map[string]interface{}{
+					{
+						"field_value_factor": map[string]interface{}{
+							"field":    "followersFuzzy",
+							"factor":   1,
+							"modifier": "log1p",
+							"missing":  1,
+						},
+					},
+				},
+				"boost_mode": "multiply",
+				"score_mode": "multiply",
 			},
 		},
 		"size": params.Size,
 		"from": params.Offset,
-	}
-
-	if len(filters) > 0 {
-		query["query"].(map[string]interface{})["bool"].(map[string]interface{})["filter"] = filters
 	}
 
 	return doSearch(ctx, escli, index, query)
@@ -347,29 +366,48 @@ func DoSearchProfilesTypeahead(ctx context.Context, escli *es.Client, index stri
 
 	filters := params.Filters()
 
+	boolQuery := map[string]interface{}{
+		"must": map[string]interface{}{
+			"multi_match": map[string]interface{}{
+				"query":    params.Query,
+				"type":     "bool_prefix",
+				"operator": "and",
+				"fields": []string{
+					"typeahead",
+					"typeahead._2gram",
+					"typeahead._3gram",
+				},
+			},
+		},
+	}
+
+	if len(filters) > 0 {
+		boolQuery["filter"] = filters
+	}
+
+	// Wrap in function_score to boost by follower count
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": map[string]interface{}{
-					"multi_match": map[string]interface{}{
-						"query":    params.Query,
-						"type":     "bool_prefix",
-						"operator": "and",
-						"fields": []string{
-							"typeahead",
-							"typeahead._2gram",
-							"typeahead._3gram",
+			"function_score": map[string]interface{}{
+				"query": map[string]interface{}{
+					"bool": boolQuery,
+				},
+				"functions": []map[string]interface{}{
+					{
+						"field_value_factor": map[string]interface{}{
+							"field":    "followersFuzzy",
+							"factor":   1,
+							"modifier": "log1p",
+							"missing":  1,
 						},
 					},
 				},
+				"boost_mode": "multiply",
+				"score_mode": "multiply",
 			},
 		},
 		"size": params.Size,
 		"from": params.Offset,
-	}
-
-	if len(filters) > 0 {
-		query["query"].(map[string]interface{})["bool"].(map[string]interface{})["filter"] = filters
 	}
 
 	return doSearch(ctx, escli, index, query)
