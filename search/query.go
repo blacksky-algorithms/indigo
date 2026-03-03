@@ -328,7 +328,7 @@ func DoSearchProfiles(ctx context.Context, dir identity.Directory, escli *es.Cli
 		boolQuery["filter"] = filters
 	}
 
-	// Wrap in function_score to boost by follower count
+	// Wrap in function_score to boost by follower count and pagerank
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
 			"function_score": map[string]interface{}{
@@ -339,6 +339,14 @@ func DoSearchProfiles(ctx context.Context, dir identity.Directory, escli *es.Cli
 					{
 						"field_value_factor": map[string]interface{}{
 							"field":    "followersFuzzy",
+							"factor":   1,
+							"modifier": "log1p",
+							"missing":  1,
+						},
+					},
+					{
+						"field_value_factor": map[string]interface{}{
+							"field":    "pagerank",
 							"factor":   1,
 							"modifier": "log1p",
 							"missing":  1,
@@ -385,7 +393,7 @@ func DoSearchProfilesTypeahead(ctx context.Context, escli *es.Client, index stri
 		boolQuery["filter"] = filters
 	}
 
-	// Wrap in function_score to boost by follower count
+	// Wrap in function_score to boost by follower count and pagerank
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
 			"function_score": map[string]interface{}{
@@ -396,6 +404,14 @@ func DoSearchProfilesTypeahead(ctx context.Context, escli *es.Client, index stri
 					{
 						"field_value_factor": map[string]interface{}{
 							"field":    "followersFuzzy",
+							"factor":   1,
+							"modifier": "log1p",
+							"missing":  1,
+						},
+					},
+					{
+						"field_value_factor": map[string]interface{}{
+							"field":    "pagerank",
 							"factor":   1,
 							"modifier": "log1p",
 							"missing":  1,
